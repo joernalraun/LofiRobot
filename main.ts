@@ -75,28 +75,7 @@ enum FaceValues {
     //% block.loc.es="Ojo derecho"
     //% block.loc.it="Occhio destro"
     //% block.loc.el="Δεξί μάτι"
-    RightEye,
-    //% block="Roll"
-    //% block.loc.de="Rollen"
-    //% block.loc.fr="Roulis"
-    //% block.loc.es="Balanceo"
-    //% block.loc.it="Rollio"
-    //% block.loc.el="Κύλιση"
-    Roll,
-    //% block="Smile"
-    //% block.loc.de="Lächeln"
-    //% block.loc.fr="Sourire"
-    //% block.loc.es="Sonrisa"
-    //% block.loc.it="Sorriso"
-    //% block.loc.el="Χαμόγελο"
-    Smile,
-    //% block="Face Visible"
-    //% block.loc.de="Gesicht sichtbar"
-    //% block.loc.fr="Visage visible"
-    //% block.loc.es="Cara visible"
-    //% block.loc.it="Viso visibile"
-    //% block.loc.el="Πρόσωπο ορατό"
-    FaceVisible
+    RightEye
 }
 
 enum ControlCommands {
@@ -208,19 +187,19 @@ namespace LofiRobot {
      * Process movement data when received via Bluetooth
      * @param handler Code to be executed after processing movement data
      */
-    //% block="Bewegungsdaten verarbeiten"
-    //% block.loc.de="Bewegungsdaten verarbeiten"
-    //% block.loc.fr="Traiter les données de mouvement"
-    //% block.loc.es="Procesar datos de movimiento"
-    //% block.loc.it="Elabora dati di movimento"
-    //% block.loc.el="Επεξεργασία δεδομένων κίνησης"
+    //% block="on movement data received"
+    //% block.loc.de="wenn Bewegungsdaten empfangen"
+    //% block.loc.fr="quand les données de mouvement sont reçues"
+    //% block.loc.es="cuando se reciben datos de movimiento"
+    //% block.loc.it="quando vengono ricevuti dati di movimento"
+    //% block.loc.el="όταν λαμβάνονται δεδομένα κίνησης"
     //% weight=90
     export function onDataReceived(handler: () => void): void {
         if (!uartListenerStarted) {
             bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
                 receivedString = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
                 
-                // Process robot head data first
+                // Process robot head data
                 x = parseFloat(receivedString.substr(0, 2))
                 y = parseFloat(receivedString.substr(2, 2))
                 z = parseFloat(receivedString.substr(4, 2))
@@ -233,7 +212,7 @@ namespace LofiRobot {
                 smile = parseFloat(receivedString.substr(17, 1))
                 face_visible = parseFloat(receivedString.substr(18, 1))
                 
-                // Then execute user handler
+                // Execute user handler
                 handler()
                 
                 // Execute control handlers
@@ -287,15 +266,6 @@ namespace LofiRobot {
             case FaceValues.RightEye:
                 valueToShow = right_eye
                 break
-            case FaceValues.Roll:
-                valueToShow = roll
-                break
-            case FaceValues.Smile:
-                valueToShow = smile
-                break
-            case FaceValues.FaceVisible:
-                valueToShow = face_visible
-                break
         }
 
         led.plotBarGraph(valueToShow, maxValue)
@@ -330,12 +300,6 @@ namespace LofiRobot {
                 return left_eye
             case FaceValues.RightEye:
                 return right_eye
-            case FaceValues.Roll:
-                return roll
-            case FaceValues.Smile:
-                return smile
-            case FaceValues.FaceVisible:
-                return face_visible
             default:
                 return 0
         }
@@ -401,6 +365,19 @@ namespace LofiRobot {
         if (!uartListenerStarted) {
             bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
                 receivedString = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
+                
+                // Process robot head data
+                x = parseFloat(receivedString.substr(0, 2))
+                y = parseFloat(receivedString.substr(2, 2))
+                z = parseFloat(receivedString.substr(4, 2))
+                yaw = parseFloat(receivedString.substr(6, 2))
+                pitch = parseFloat(receivedString.substr(8, 2))
+                mouth = parseFloat(receivedString.substr(10, 2))
+                left_eye = parseFloat(receivedString.substr(12, 2))
+                right_eye = parseFloat(receivedString.substr(14, 2))
+                roll = parseFloat(receivedString.substr(16, 1))
+                smile = parseFloat(receivedString.substr(17, 1))
+                face_visible = parseFloat(receivedString.substr(18, 1))
                 
                 // Execute control handlers
                 for (let i = 0; i < controlHandlers.length; i++) {
