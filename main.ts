@@ -1,4 +1,5 @@
-/**
+//% weight=50
+    //% subcategory="Erweitert"/**
  * LOFI ROBOT Bluetooth Extension
  */
 
@@ -166,7 +167,8 @@ namespace LofiRobot {
     //% block.loc.es="Inicializar Bluetooth"
     //% block.loc.it="Inizializza Bluetooth"
     //% block.loc.el="Αρχικοποίηση Bluetooth"
-    //% weight=100
+    //% weight=91
+    //% subcategory="Bluetooth"
     export function initializeBluetooth(): void {
         if (!bluetoothStarted) {
             bluetooth.startUartService()
@@ -194,6 +196,7 @@ namespace LofiRobot {
     //% block.loc.it="quando vengono ricevuti dati di movimento"
     //% block.loc.el="όταν λαμβάνονται δεδομένα κίνησης"
     //% weight=90
+    //% subcategory="Face-App"
     export function onDataReceived(handler: () => void): void {
         if (!uartListenerStarted) {
             bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
@@ -237,6 +240,7 @@ namespace LofiRobot {
     //% block.loc.it="mostra grafico a barre per dati di movimento del valore %valueType"
     //% block.loc.el="εμφάνιση γραφήματος στηλών για δεδομένα κίνησης της αξίας %valueType"
     //% weight=70
+    //% subcategory="Face-App"
     export function showRobotHeadBarGraph(valueType: FaceValues): void {
         let valueToShow = 0
         let maxValue = 100
@@ -282,6 +286,7 @@ namespace LofiRobot {
     //% block.loc.it="dati di movimento del valore %value"
     //% block.loc.el="δεδομένα κίνησης από την αξία %value"
     //% weight=60
+    //% subcategory="Face-App"
     export function getRobotHeadValue(value: FaceValues): number {
         switch (value) {
             case FaceValues.X:
@@ -319,8 +324,8 @@ namespace LofiRobot {
     //% command.fieldOptions.columns=4
     //% command.fieldOptions.width="300"
     //% command.fieldOptions.maxRows=2
-    //% weight=65
-    //% advanced=true
+    //% weight=55
+    //% subcategory="Control-App"
     export function isControlCommand(command: ControlCommands): boolean {
         switch (command) {
             case ControlCommands.Up:
@@ -360,6 +365,7 @@ namespace LofiRobot {
     //% command.fieldOptions.width="300"
     //% command.fieldOptions.maxRows=2
     //% weight=64
+    //% subcategory="Control-App"
     export function onControlCommand(command: ControlCommands, handler: () => void): void {
         // Automatically start UART listener if not already started
         if (!uartListenerStarted) {
@@ -406,6 +412,7 @@ namespace LofiRobot {
     //% block.loc.it="valore Slider1"
     //% block.loc.el="αξία Slider1"
     //% weight=57
+    //% subcategory="Control-App"
     export function getXCommandValue(): number {
         if (receivedString.charAt(0) == "c") {
             return parseFloat(receivedString.substr(1, 3))
@@ -423,6 +430,7 @@ namespace LofiRobot {
     //% block.loc.it="valore Slider2"
     //% block.loc.el="αξία Slider2"
     //% weight=56
+    //% subcategory="Control-App"
     export function getCCommandValue(): number {
         if (receivedString.charAt(0) == "x") {
             return parseFloat(receivedString.substr(1, 3))
@@ -440,7 +448,7 @@ namespace LofiRobot {
     //% block.loc.it="stringa ricevuta"
     //% block.loc.el="ληφθείσα συμβολοσειρά"
     //% weight=50
-    //% advanced=true
+    //% subcategory="Erweitert"
     export function getReceivedString(): string {
         return receivedString
     }
