@@ -1,7 +1,7 @@
 {
     "name": "LofiRobot",
-    "version": "0.2.5",
-    "description": "Lofi Robot Cardboard Extension",
+    "version": "0.2.6",
+    "description": "Cardboard Robots Extension",
     "dependencies": {
         "core": "*",
         "v3": "*",
