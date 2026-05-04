@@ -1,14 +1,19 @@
 /**
  * LOFI ROBOT — Bluetooth + Serial Extension
  *
- * Receives face-tracking data from the FaceRobot web app over EITHER
- * Bluetooth UART (mobile/desktop) OR USB serial (desktop). The user
- * picks one transport in the web app's connect menu.
+ * Receives face-tracking data from the FaceRobot web app over Bluetooth
+ * UART or USB serial. The user picks one transport at a time in the web
+ * app's connect menu.
  *
- * The Bluetooth and Serial paths are FULLY INDEPENDENT — separate init
- * blocks, separate "on data received" blocks, separate listeners. Each
- * captures its handler directly inside its closure so neither path
- * depends on shared mutable state.
+ * Architecture (mirrors the original LofiRobot 0.2.x extension):
+ *   - "Initialize Bluetooth" / "Initialize Serial" each start their
+ *     transport AND register the corresponding data listener once.
+ *   - The listeners parse the payload into module variables and then
+ *     iterate the SAME two handler arrays: dataHandlers (added by
+ *     "on movement data received") and controlHandlers (added by
+ *     "When control command … is received"). This is the exact pattern
+ *     LofiRobot-main uses for controlHandlers and that works reliably
+ *     in PXT static TypeScript.
  *
  * Payload layout (~10 Hz, terminated by \n):
  *   00-01 X       16 Roll        19-20 BrowDownLeft     29-30 GazeDownLeft
@@ -233,9 +238,9 @@ enum ControlCommands {
     CCommand
 }
 
-//% weight=20 color=#ff6900 icon=""
+//% weight=20 color=#ff6900 icon=""
 namespace LofiRobot {
-    // Robot-Head Variables
+    // Robot-Head variables
     let x = 0
     let y = 0
     let z = 0
@@ -266,15 +271,28 @@ namespace LofiRobot {
     let serialStarted = false
     let bleListenerStarted = false
     let serialListenerStarted = false
+    let dataHandlers: (() => void)[] = []
     let controlHandlers: (() => void)[] = []
+
+    function showInitAnimation(): void {
+        basic.showIcon(IconNames.Square)
+        for (let i = 0; i < 3; i++) {
+            led.plot(2, 2)
+            basic.pause(200)
+            led.unplot(2, 2)
+            basic.pause(200)
+        }
+    }
 
     // ========================================================================
     // CONNECTION SUBCATEGORY
     // ========================================================================
 
     /**
-     * Initialize Bluetooth UART. Call once at the start of your program if
-     * the FaceRobot app will connect via BLE.
+     * Initialize the Bluetooth UART transport. Call this once at the start
+     * of your program if the FaceRobot app will connect via Bluetooth.
+     * Starts the UART service AND registers the BLE data listener — both
+     * in the order MakeCode requires.
      */
     //% block="Initialize Bluetooth"
     //% block.loc.de="Bluetooth initialisieren"
@@ -292,21 +310,58 @@ namespace LofiRobot {
     export function initializeBluetooth(): void {
         if (!bluetoothStarted) {
             bluetooth.startUartService()
-            basic.showIcon(IconNames.Square)
             bluetoothStarted = true
+            showInitAnimation()
+        }
+        if (!bleListenerStarted) {
+            bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
+                receivedString = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
 
-            for (let i = 0; i < 3; i++) {
-                led.plot(2, 2)
-                basic.pause(200)
-                led.unplot(2, 2)
-                basic.pause(200)
-            }
+                x = parseFloat(receivedString.substr(0, 2))
+                y = parseFloat(receivedString.substr(2, 2))
+                z = parseFloat(receivedString.substr(4, 2))
+                yaw = parseFloat(receivedString.substr(6, 2))
+                pitch = parseFloat(receivedString.substr(8, 2))
+                mouth = parseFloat(receivedString.substr(10, 2))
+                left_eye = parseFloat(receivedString.substr(12, 2))
+                right_eye = parseFloat(receivedString.substr(14, 2))
+                roll = parseFloat(receivedString.substr(16, 1))
+                smile = parseFloat(receivedString.substr(17, 1))
+                face_visible = parseFloat(receivedString.substr(18, 1))
+
+                if (receivedString.length >= 41) {
+                    brow_down_l      = parseFloat(receivedString.substr(19, 2))
+                    brow_down_r      = parseFloat(receivedString.substr(21, 2))
+                    brow_inner_up    = parseFloat(receivedString.substr(23, 2))
+                    brow_outer_up_l  = parseFloat(receivedString.substr(25, 2))
+                    brow_outer_up_r  = parseFloat(receivedString.substr(27, 2))
+                    gaze_down_l      = parseFloat(receivedString.substr(29, 2))
+                    gaze_down_r      = parseFloat(receivedString.substr(31, 2))
+                    gaze_up_l        = parseFloat(receivedString.substr(33, 2))
+                    gaze_up_r        = parseFloat(receivedString.substr(35, 2))
+                    gaze_in_l        = parseFloat(receivedString.substr(37, 2))
+                    gaze_in_r        = parseFloat(receivedString.substr(39, 2))
+                }
+
+                for (let i = 0; i < dataHandlers.length; i++) {
+                    if (dataHandlers[i]) {
+                        dataHandlers[i]()
+                    }
+                }
+                for (let i = 0; i < controlHandlers.length; i++) {
+                    if (controlHandlers[i]) {
+                        controlHandlers[i]()
+                    }
+                }
+            })
+            bleListenerStarted = true
         }
     }
 
     /**
-     * Initialize USB Serial. Call once at the start of your program if the
-     * FaceRobot app will connect via Web Serial (USB cable).
+     * Initialize the USB Serial transport. Call this once at the start of
+     * your program if the FaceRobot app will connect via Web Serial (USB
+     * cable). Sets the receive buffer and registers the Serial listener.
      */
     //% block="Initialize Serial"
     //% block.loc.de="Serial initialisieren"
@@ -324,113 +379,9 @@ namespace LofiRobot {
     export function initializeSerial(): void {
         if (!serialStarted) {
             serial.setRxBufferSize(128)
-            basic.showIcon(IconNames.Square)
             serialStarted = true
-
-            for (let i = 0; i < 3; i++) {
-                led.plot(2, 2)
-                basic.pause(200)
-                led.unplot(2, 2)
-                basic.pause(200)
-            }
+            showInitAnimation()
         }
-    }
-
-    /**
-     * Scroll the Calliope mini's friendly BLE name on the LED matrix.
-     */
-    //% block="Calliope mini BLE-device-name"
-    //% block.loc.de="Calliope mini BLE-Anzeigename"
-    //% block.loc.fr="Nom d'affichage Calliope mini BLE"
-    //% block.loc.es="Nombre de dispositivo Calliope mini BLE"
-    //% block.loc.it="Nome visualizzato Calliope mini BLE"
-    //% block.loc.el="Όνομα εμφάνισης Calliope mini BLE"
-    //% weight=95
-    //% subcategory="Connection"
-    //% subcategory.loc.de="Verbindung"
-    //% subcategory.loc.fr="Connexion"
-    //% subcategory.loc.es="Conexión"
-    //% subcategory.loc.it="Connessione"
-    //% subcategory.loc.el="Σύνδεση"
-    export function showDeviceName(): void {
-        basic.showString(control.deviceName().toUpperCase())
-    }
-
-    // ========================================================================
-    // FACE-APP SUBCATEGORY
-    // ========================================================================
-
-    /**
-     * Run code each time a complete movement-data packet is received via
-     * Bluetooth. Mirrors the original working LofiRobot 0.2.x extension.
-     */
-    //% block="on Bluetooth movement data received"
-    //% block.loc.de="wenn Bluetooth-Bewegungsdaten empfangen"
-    //% block.loc.fr="quand les données Bluetooth de mouvement sont reçues"
-    //% block.loc.es="cuando se reciben datos Bluetooth de movimiento"
-    //% block.loc.it="quando vengono ricevuti dati Bluetooth di movimento"
-    //% block.loc.el="όταν λαμβάνονται δεδομένα κίνησης Bluetooth"
-    //% weight=90
-    //% subcategory="Face-App"
-    export function onDataReceived(handler: () => void): void {
-        if (!bleListenerStarted) {
-            bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
-                receivedString = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine))
-
-                // Original 19-char fields
-                x = parseFloat(receivedString.substr(0, 2))
-                y = parseFloat(receivedString.substr(2, 2))
-                z = parseFloat(receivedString.substr(4, 2))
-                yaw = parseFloat(receivedString.substr(6, 2))
-                pitch = parseFloat(receivedString.substr(8, 2))
-                mouth = parseFloat(receivedString.substr(10, 2))
-                left_eye = parseFloat(receivedString.substr(12, 2))
-                right_eye = parseFloat(receivedString.substr(14, 2))
-                roll = parseFloat(receivedString.substr(16, 1))
-                smile = parseFloat(receivedString.substr(17, 1))
-                face_visible = parseFloat(receivedString.substr(18, 1))
-
-                // Brow + gaze (positions 19-40, present when payload is the
-                // newer 41-char format)
-                if (receivedString.length >= 41) {
-                    brow_down_l      = parseFloat(receivedString.substr(19, 2))
-                    brow_down_r      = parseFloat(receivedString.substr(21, 2))
-                    brow_inner_up    = parseFloat(receivedString.substr(23, 2))
-                    brow_outer_up_l  = parseFloat(receivedString.substr(25, 2))
-                    brow_outer_up_r  = parseFloat(receivedString.substr(27, 2))
-                    gaze_down_l      = parseFloat(receivedString.substr(29, 2))
-                    gaze_down_r      = parseFloat(receivedString.substr(31, 2))
-                    gaze_up_l        = parseFloat(receivedString.substr(33, 2))
-                    gaze_up_r        = parseFloat(receivedString.substr(35, 2))
-                    gaze_in_l        = parseFloat(receivedString.substr(37, 2))
-                    gaze_in_r        = parseFloat(receivedString.substr(39, 2))
-                }
-
-                handler()
-
-                for (let i = 0; i < controlHandlers.length; i++) {
-                    if (controlHandlers[i]) {
-                        controlHandlers[i]()
-                    }
-                }
-            })
-            bleListenerStarted = true
-        }
-    }
-
-    /**
-     * Run code each time a complete movement-data packet is received via
-     * USB Serial.
-     */
-    //% block="on Serial movement data received"
-    //% block.loc.de="wenn Serial-Bewegungsdaten empfangen"
-    //% block.loc.fr="quand les données Serial de mouvement sont reçues"
-    //% block.loc.es="cuando se reciben datos Serial de movimiento"
-    //% block.loc.it="quando vengono ricevuti dati Serial di movimento"
-    //% block.loc.el="όταν λαμβάνονται δεδομένα κίνησης Serial"
-    //% weight=89
-    //% subcategory="Face-App"
-    export function onSerialDataReceived(handler: () => void): void {
         if (!serialListenerStarted) {
             serial.onDataReceived(serial.delimiters(Delimiters.NewLine), function () {
                 receivedString = serial.readUntil(serial.delimiters(Delimiters.NewLine))
@@ -461,8 +412,11 @@ namespace LofiRobot {
                     gaze_in_r        = parseFloat(receivedString.substr(39, 2))
                 }
 
-                handler()
-
+                for (let i = 0; i < dataHandlers.length; i++) {
+                    if (dataHandlers[i]) {
+                        dataHandlers[i]()
+                    }
+                }
                 for (let i = 0; i < controlHandlers.length; i++) {
                     if (controlHandlers[i]) {
                         controlHandlers[i]()
@@ -471,6 +425,47 @@ namespace LofiRobot {
             })
             serialListenerStarted = true
         }
+    }
+
+    /**
+     * Scroll the Calliope mini's friendly BLE name on the LED matrix.
+     */
+    //% block="Calliope mini BLE-device-name"
+    //% block.loc.de="Calliope mini BLE-Anzeigename"
+    //% block.loc.fr="Nom d'affichage Calliope mini BLE"
+    //% block.loc.es="Nombre de dispositivo Calliope mini BLE"
+    //% block.loc.it="Nome visualizzato Calliope mini BLE"
+    //% block.loc.el="Όνομα εμφάνισης Calliope mini BLE"
+    //% weight=95
+    //% subcategory="Connection"
+    //% subcategory.loc.de="Verbindung"
+    //% subcategory.loc.fr="Connexion"
+    //% subcategory.loc.es="Conexión"
+    //% subcategory.loc.it="Connessione"
+    //% subcategory.loc.el="Σύνδεση"
+    export function showDeviceName(): void {
+        basic.showString(control.deviceName().toUpperCase())
+    }
+
+    // ========================================================================
+    // FACE-APP SUBCATEGORY
+    // ========================================================================
+
+    /**
+     * Run code each time a complete movement-data packet is received,
+     * regardless of which transport (Bluetooth or Serial) delivered it.
+     * Same dispatch model as "When control command … is received".
+     */
+    //% block="on movement data received"
+    //% block.loc.de="wenn Bewegungsdaten empfangen"
+    //% block.loc.fr="quand les données de mouvement sont reçues"
+    //% block.loc.es="cuando se reciben datos de movimiento"
+    //% block.loc.it="quando vengono ricevuti dati di movimento"
+    //% block.loc.el="όταν λαμβάνονται δεδομένα κίνησης"
+    //% weight=90
+    //% subcategory="Face-App"
+    export function onDataReceived(handler: () => void): void {
+        dataHandlers.push(handler)
     }
 
     /**
@@ -559,9 +554,7 @@ namespace LofiRobot {
     }
 
     /**
-     * Run code when a specific control command is received. Works for
-     * either Bluetooth or Serial — register a corresponding "on … data
-     * received" block first so the underlying listener is up.
+     * Run code when a specific control command is received.
      */
     //% block="When control command %command is received"
     //% block.loc.de="Wenn Steuerbefehl %command empfangen wird"
